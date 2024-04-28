@@ -17,7 +17,7 @@ use {
     },
     crate::task::resolve,
     prometheus::{
-        core::{AtomicU64, GenericCounter},
+        core::{AtomicU64, Counter},
         Histogram,
     },
     std::time::Instant,
@@ -28,7 +28,7 @@ pub struct GRPCRunner {
     cq_next_duration_his: Histogram,
     execute_duration_his: Histogram,
     wait_duration_his: Histogram,
-    event_counter: [GenericCounter<AtomicU64>; 6],
+    event_counter: [Counter<AtomicU64>; 6],
 }
 
 #[cfg(feature = "prometheus")]
@@ -188,11 +188,6 @@ impl EnvBuilder {
         for i in 0..self.cq_count {
             let tx_i = tx.clone();
             let mut builder = ThreadBuilder::new();
-<<<<<<< HEAD
-            if let Some(ref prefix) = self.name_prefix {
-                builder = builder.name(format!("{}-{}", prefix, i));
-            }
-=======
             let name = self
                 .name_prefix
                 .as_ref()
@@ -200,7 +195,6 @@ impl EnvBuilder {
             #[cfg(feature = "prometheus")]
             let runner = GRPCRunner::new(&name);
             builder = builder.name(name);
->>>>>>> f2ba50f... use prometheus as optional depence
             let after_start = self.after_start.clone();
             let before_stop = self.before_stop.clone();
             let handle = builder
