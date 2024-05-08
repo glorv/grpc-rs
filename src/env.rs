@@ -25,12 +25,15 @@ use {
 const METRICS_FLUSH_INTERVAL: u64 = 10_000; // 10s
 
 #[cfg(feature = "prometheus")]
+const METRICS_FLUSH_COUNT: u64 = 1000;
+
+#[cfg(feature = "prometheus")]
 pub struct GRPCRunner {
     cq_next_duration_his: LocalHistogram,
     execute_duration_his: LocalHistogram,
     wait_duration_his: LocalHistogram,
     event_counter: [IntCounter; 6],
-    last_flush_time: Instant,
+    count: u64,
 }
 
 #[cfg(feature = "prometheus")]
@@ -50,7 +53,7 @@ impl GRPCRunner {
             execute_duration_his,
             wait_duration_his,
             event_counter,
-            last_flush_time: Instant::now(),
+            count: 0,
         }
     }
 
@@ -61,11 +64,12 @@ impl GRPCRunner {
         let cq = CompletionQueue::new(cq, worker_info);
         tx.send(cq.clone()).expect("send back completion queue");
         loop {
-            let now = Instant::now();
+            let start = Instant::now();
             let e = cq.next();
+            let next_end = Instant::now();
             self.cq_next_duration_his
-                .observe(now.elapsed().as_secs_f64());
-            let now = Instant::now();
+                .observe(next_end.saturating_duration_since(start).as_secs_f64());
+            
             match e.type_ {
                 EventType::GRPC_QUEUE_SHUTDOWN => break,
                 // timeout should not happen in theory.
@@ -79,19 +83,18 @@ impl GRPCRunner {
                 work.finish();
             }
             self.execute_duration_his
-                .observe(now.elapsed().as_secs_f64());
+                .observe(next_end.elapsed().as_secs_f64());
             self.maybe_flush();
         }
     }
 
+    #[inline]
     fn maybe_flush(&mut self) {
-        let now = Instant::now();
-        if now.saturating_duration_since(self.last_flush_time)
-            < std::time::Duration::from_millis(METRICS_FLUSH_INTERVAL)
-        {
+        self.count += 1;
+        if self.count < METRICS_FLUSH_COUNT {
             return;
         }
-        self.last_flush_time = now;
+        self.count = 0;
         self.cq_next_duration_his.flush();
         self.execute_duration_his.flush();
         self.wait_duration_his.flush();
