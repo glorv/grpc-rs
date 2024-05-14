@@ -64,11 +64,11 @@ impl GRPCRunner {
         let cq = CompletionQueue::new(cq, worker_info);
         tx.send(cq.clone()).expect("send back completion queue");
         loop {
-            let start = Instant::now();
+            //let start = Instant::now();
             let e = cq.next();
             let next_end = Instant::now();
-            self.cq_next_duration_his
-                .observe(next_end.saturating_duration_since(start).as_secs_f64());
+            // self.cq_next_duration_his
+            //     .observe(next_end.saturating_duration_since(start).as_secs_f64());
             
             match e.type_ {
                 EventType::GRPC_QUEUE_SHUTDOWN => break,
@@ -100,32 +100,34 @@ impl GRPCRunner {
         self.wait_duration_his.flush();
     }
 
+    #[inline]
     fn resolve(&self, tag: Box<CallTag>, cq: &CompletionQueue, success: bool) {
-        match *tag {
-            CallTag::Batch(prom) => {
-                self.event_counter[0].inc();
-                prom.resolve(success)
-            }
-            CallTag::Request(cb) => {
-                self.event_counter[1].inc();
-                cb.resolve(cq, success)
-            }
-            CallTag::UnaryRequest(cb) => {
-                self.event_counter[2].inc();
-                cb.resolve(cq, success)
-            }
-            CallTag::Abort(_) => self.event_counter[3].inc(),
-            CallTag::Action(prom) => {
-                self.event_counter[4].inc();
-                prom.resolve(success)
-            }
-            CallTag::Spawn(task) => {
-                self.event_counter[5].inc();
-                self.wait_duration_his
-                    .observe(task.reset_push_time().elapsed().as_secs_f64());
-                resolve(task, success)
-            }
-        }
+        // match *tag {
+        //     CallTag::Batch(prom) => {
+        //         self.event_counter[0].inc();
+        //         prom.resolve(success)
+        //     }
+        //     CallTag::Request(cb) => {
+        //         self.event_counter[1].inc();
+        //         cb.resolve(cq, success)
+        //     }
+        //     CallTag::UnaryRequest(cb) => {
+        //         self.event_counter[2].inc();
+        //         cb.resolve(cq, success)
+        //     }
+        //     CallTag::Abort(_) => self.event_counter[3].inc(),
+        //     CallTag::Action(prom) => {
+        //         self.event_counter[4].inc();
+        //         prom.resolve(success)
+        //     }
+        //     CallTag::Spawn(task) => {
+        //         self.event_counter[5].inc();
+        //         self.wait_duration_his
+        //             .observe(task.reset_push_time().elapsed().as_secs_f64());
+        //         resolve(task, success)
+        //     }
+        // }
+        tag.resolve(cq, success)
     }
 }
 
