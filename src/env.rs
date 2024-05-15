@@ -131,7 +131,7 @@ impl GRPCRunner {
     }
 }
 
-#[cfg(not(feature = "prometheus"))]
+//#[cfg(not(feature = "prometheus"))]
 fn poll_queue(tx: mpsc::Sender<CompletionQueue>) {
     let cq = Arc::new(CompletionQueueHandle::new());
     let worker_info = Arc::new(WorkQueue::new());
@@ -218,8 +218,8 @@ impl EnvBuilder {
                 .name_prefix
                 .as_ref()
                 .map_or(format!("grpc-pool-{i}"), |prefix| format!("{prefix}-{i}"));
-            #[cfg(feature = "prometheus")]
-            let mut runner = GRPCRunner::new(&name);
+            //#[cfg(feature = "prometheus")]
+            //let mut runner = GRPCRunner::new(&name);
             builder = builder.name(name);
             let after_start = self.after_start.clone();
             let before_stop = self.before_stop.clone();
@@ -228,9 +228,9 @@ impl EnvBuilder {
                     if let Some(f) = after_start {
                         f();
                     }
-                    #[cfg(feature = "prometheus")]
-                    runner.run(tx_i);
-                    #[cfg(not(feature = "prometheus"))]
+                    //#[cfg(feature = "prometheus")]
+                    //runner.run(tx_i);
+                    //#[cfg(not(feature = "prometheus"))]
                     poll_queue(tx_i);
                     if let Some(f) = before_stop {
                         f();
