@@ -1,7 +1,7 @@
 // Copyright 2019 TiKV Project Authors. Licensed under Apache-2.0.
 
 #[cfg(feature = "prometheus")]
-use prometheus::{local::LocalHistogram, IntCounter};
+use prometheus::local::{LocalHistogram, LocalIntCounter};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc;
 use std::sync::Arc;
@@ -29,7 +29,7 @@ pub struct GRPCRunner {
     cq_next_duration_his: LocalHistogram,
     execute_duration_his: LocalHistogram,
     wait_duration_his: LocalHistogram,
-    event_counter: [IntCounter; 6],
+    event_counter: [LocalIntCounter; 6],
     last_flush_time: Instant,
 }
 
@@ -43,8 +43,12 @@ impl GRPCRunner {
             .with_label_values(&[name])
             .local();
         let wait_duration_his = GRPC_TASK_WAIT_DURATION.with_label_values(&[name]).local();
-        let event_counter = ["batch", "request", "unary", "abort", "action", "spawn"]
-            .map(|event| GRPC_POOL_EVENT_COUNT_VEC.with_label_values(&[name, event]));
+        let event_counter =
+            ["batch", "request", "unary", "abort", "action", "spawn"].map(|event| {
+                GRPC_POOL_EVENT_COUNT_VEC
+                    .with_label_values(&[name, event])
+                    .local()
+            });
         GRPCRunner {
             cq_next_duration_his,
             execute_duration_his,
@@ -61,11 +65,11 @@ impl GRPCRunner {
         let cq = CompletionQueue::new(cq, worker_info);
         tx.send(cq.clone()).expect("send back completion queue");
         loop {
-            let now = Instant::now();
+            let start = Instant::now();
             let e = cq.next();
+            let handle_start = Instant::now();
             self.cq_next_duration_his
-                .observe(now.elapsed().as_secs_f64());
-            let now = Instant::now();
+                .observe(handle_start.saturating_duration_since(start).as_secs_f64());
             match e.type_ {
                 EventType::GRPC_QUEUE_SHUTDOWN => break,
                 // timeout should not happen in theory.
@@ -79,7 +83,7 @@ impl GRPCRunner {
                 work.finish();
             }
             self.execute_duration_his
-                .observe(now.elapsed().as_secs_f64());
+                .observe(handle_start.elapsed().as_secs_f64());
             self.maybe_flush();
         }
     }
@@ -95,6 +99,9 @@ impl GRPCRunner {
         self.cq_next_duration_his.flush();
         self.execute_duration_his.flush();
         self.wait_duration_his.flush();
+        for counter in &mut self.event_counter {
+            counter.flush();
+        }
     }
 
     fn resolve(&self, tag: Box<CallTag>, cq: &CompletionQueue, success: bool) {
